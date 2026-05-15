@@ -28,7 +28,7 @@ cmap = colors.LinearSegmentedColormap.from_list(
     cmap(np.linspace(0.0, 0.7, 1000)),
 )
 
-def plot_corner(results, param_list=None, downsample=None, **corner_kwargs):
+def plot_corner(results, param_list=None, downsample=None, compresults=None, **corner_kwargs,):
     """
     Make a corner plot of posterior on orbit fit from any sampler
 
@@ -103,8 +103,15 @@ def plot_corner(results, param_list=None, downsample=None, **corner_kwargs):
         "zdot": "$zdot_{0}$ [km/s]",
     }
 
+
     if param_list is None:
         param_list = results.labels
+
+   # if compresults is not None:
+      #  if set(param_list) != set(compresults.labels):
+           # raise ValueError(
+            #    "results and compresults should have the same param list"
+           # )
 
     param_indices = []
     angle_indices = []
@@ -142,6 +149,27 @@ def plot_corner(results, param_list=None, downsample=None, **corner_kwargs):
         u.jupiterMass
     )  # convert to Jupiter masses for companions
 
+    if compresults is not None:
+
+        if downsample:
+            comppost, _ = compresults.downsample(downsample)
+            compweights = None
+        else:
+            comppost = compresults.weighted_post
+            compweights = compresults.weights
+
+        compsamples = np.copy(comppost[:, param_indices])
+
+        # convert angles from rad to deg
+        compsamples[:, angle_indices] = np.degrees(
+            compsamples[:, angle_indices]
+        )
+
+        # convert companion masses to Jupiter masses
+        compsamples[:, secondary_mass_indices] *= u.solMass.to(
+            u.jupiterMass
+        )
+
     if (
         "labels" not in corner_kwargs
     ):  # use default labels if user didn't already supply them
@@ -168,7 +196,34 @@ def plot_corner(results, param_list=None, downsample=None, **corner_kwargs):
 
         corner_kwargs["labels"] = reduced_labels_list
 
-    figure = corner.corner(samples, **corner_kwargs, weights=weights)
+    if compresults is not None:
+
+        figure = corner.corner(
+            samples,
+            weights=weights,
+            color="blue",
+            hist_kwargs={"density": True, "alpha": 0.4},
+            contour_kwargs={"alpha": 0.6},
+            **corner_kwargs,
+            plot_datapoints=False, 
+            fill_contours=True, 
+        )
+
+        corner.corner(
+            compsamples,
+            weights=compweights,
+            fig=figure,
+            color="red",
+            hist_kwargs={"density": True, "alpha": 0.4},
+            contour_kwargs={"alpha": 0.6},
+            labels=None, 
+            plot_datapoints=False, 
+            fill_contours=True,
+        )
+
+    else:
+        figure = corner.corner(samples, **corner_kwargs, weights=weights)
+ 
     return figure
 
 
