@@ -11,7 +11,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 import matplotlib.colors as colors
-from matplotlib.ticker import FormatStrFormatter
+from matplotlib.ticker import FormatStrFormatter 
+from matplotlib.lines import Line2D 
 
 from erfa import ErfaWarning
 
@@ -28,7 +29,7 @@ cmap = colors.LinearSegmentedColormap.from_list(
     cmap(np.linspace(0.0, 0.7, 1000)),
 )
 
-def plot_corner(results, param_list=None, downsample=None, compresults=None, **corner_kwargs,):
+def plot_corner(results, param_list=None, downsample=None, compdown=None, compresults=None, **corner_kwargs,):
     """
     Make a corner plot of posterior on orbit fit from any sampler
 
@@ -57,6 +58,9 @@ def plot_corner(results, param_list=None, downsample=None, compresults=None, **c
         
         downsample (int):
             amount of samples to randomly draw from the posterior using ``results.downsample``
+        
+        compdown (int):
+            amount of samples to randomly draw from the posterior using ``results.downsample`` for the second set of results
 
         **corner_kwargs: any remaining keyword args are sent to ``corner.corner``.
                             See `here <https://corner.readthedocs.io/>`_.
@@ -151,8 +155,8 @@ def plot_corner(results, param_list=None, downsample=None, compresults=None, **c
 
     if compresults is not None:
 
-        if downsample:
-            comppost, _ = compresults.downsample(downsample)
+        if compdown:
+            comppost, _ = compresults.downsample(compdown)
             compweights = None
         else:
             comppost = compresults.weighted_post
@@ -206,8 +210,8 @@ def plot_corner(results, param_list=None, downsample=None, compresults=None, **c
             contour_kwargs={"alpha": 0.6},
             **corner_kwargs,
             plot_datapoints=False, 
-            fill_contours=True, 
-        )
+            fill_contours=True,  
+        ) 
 
         corner.corner(
             compsamples,
@@ -221,9 +225,21 @@ def plot_corner(results, param_list=None, downsample=None, compresults=None, **c
             fill_contours=True,
         )
 
+        legend_handles = [
+        Line2D([0], [0], color="blue", lw=3,
+               label=f"{results.sampler_name}"),
+        Line2D([0], [0], color="red", lw=3,
+               label=f"{compresults.sampler_name}")
+        ]
+
+        figure.legend(
+            handles=legend_handles,
+            loc="upper right",
+            frameon=True
+        )
+
     else:
         figure = corner.corner(samples, **corner_kwargs, weights=weights)
- 
     return figure
 
 
