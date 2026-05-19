@@ -29,7 +29,7 @@ cmap = colors.LinearSegmentedColormap.from_list(
     cmap(np.linspace(0.0, 0.7, 1000)),
 )
 
-def plot_corner(results, param_list=None, downsample=None, compdown=None, compresults=None, **corner_kwargs,):
+def plot_corner(results, param_list=None, downsample=None, comparison_downsamples=None, comparison_results=None, colors=["red", "blue"], names=None, **corner_kwargs,):
     """
     Make a corner plot of posterior on orbit fit from any sampler
 
@@ -59,9 +59,18 @@ def plot_corner(results, param_list=None, downsample=None, compdown=None, compre
         downsample (int):
             amount of samples to randomly draw from the posterior using ``results.downsample``
         
-        compdown (int):
-            amount of samples to randomly draw from the posterior using ``results.downsample`` for the second set of results
+        comparison_downsamples (int):
+            list of the amount of samples to randomly draw from the posterior using ``results.downsample`` for the second set of results
 
+        comparison_results:
+            list of results you want to compare with the original results
+            
+        colors:
+            list of colors for the graph, include the color for the initial results as well
+        
+        names:
+            list of names you want displayed accompanying each result on the legend, include the name for the initial results as well
+            
         **corner_kwargs: any remaining keyword args are sent to ``corner.corner``.
                             See `here <https://corner.readthedocs.io/>`_.
                             Note: default axis labels used unless overwritten by user input.
@@ -153,26 +162,30 @@ def plot_corner(results, param_list=None, downsample=None, compdown=None, compre
         u.jupiterMass
     )  # convert to Jupiter masses for companions
 
-    if compresults is not None:
+    if comparison_results is not None:
+        comparison_weights = [] 
+        comparison_samples = [] 
 
-        if compdown:
-            comppost, _ = compresults.downsample(compdown)
-            compweights = None
-        else:
-            comppost = compresults.weighted_post
-            compweights = compresults.weights
+        for i in range(len(comparison_results)):
+            if comparison_downsamples:
+                comparison_post, _ = comparison_results[i].downsample(comparison_downsamples[i]) 
+                comparison_weights.append(None)
+            else:
+                comparison_post = comparison_results[i].weighted_post
+                comparison_weights.append(comparison_results[i].weights)
 
-        compsamples = np.copy(comppost[:, param_indices])
+            comparison_sample = np.copy(comparison_post[:, param_indices]) 
+            # convert angles from rad to deg
+            comparison_sample[:, angle_indices] = np.degrees(
+                comparison_sample[:, angle_indices]
+            )
 
-        # convert angles from rad to deg
-        compsamples[:, angle_indices] = np.degrees(
-            compsamples[:, angle_indices]
-        )
+            # convert companion masses to Jupiter masses
+            comparison_sample[:, secondary_mass_indices] *= u.solMass.to(
+                u.jupiterMass
+            )
+            comparison_samples.append(comparison_sample)
 
-        # convert companion masses to Jupiter masses
-        compsamples[:, secondary_mass_indices] *= u.solMass.to(
-            u.jupiterMass
-        )
 
     if (
         "labels" not in corner_kwargs
@@ -200,43 +213,45 @@ def plot_corner(results, param_list=None, downsample=None, compdown=None, compre
 
         corner_kwargs["labels"] = reduced_labels_list
 
-    if compresults is not None:
-
+    if comparison_results:
         figure = corner.corner(
             samples,
             weights=weights,
-            color="blue",
+            color=colors[0],
             hist_kwargs={"density": True, "alpha": 0.4},
             contour_kwargs={"alpha": 0.6},
             **corner_kwargs,
             plot_datapoints=False, 
-            fill_contours=True,  
-        ) 
-
-        corner.corner(
-            compsamples,
-            weights=compweights,
-            fig=figure,
-            color="red",
-            hist_kwargs={"density": True, "alpha": 0.4},
-            contour_kwargs={"alpha": 0.6},
-            labels=None, 
-            plot_datapoints=False, 
-            fill_contours=True,
+            fill_contours=True,   
         )
+        
+        for i in range(len(comparison_results)):  
 
-        legend_handles = [
-        Line2D([0], [0], color="blue", lw=3,
-               label=f"{results.sampler_name}"),
-        Line2D([0], [0], color="red", lw=3,
-               label=f"{compresults.sampler_name}")
-        ]
+                corner.corner(
+                    comparison_samples[i],
+                    weights=comparison_weights[i],
+                    fig=figure,
+                    color=colors[i+1],
+                    hist_kwargs={"density": True, "alpha": 0.4},
+                    contour_kwargs={"alpha": 0.6},
+                    labels=None, 
+                    plot_datapoints=False, 
+                    fill_contours=True,
+                )
 
-        figure.legend(
-            handles=legend_handles,
-            loc="upper right",
-            frameon=True
-        )
+        if names:
+            legend_handles = [
+                Line2D([0], [0], color=colors[0], lw=3,
+                label=f"{names[0]}"),
+            ]
+            for i in range(len(comparison_results)): 
+                legend_handles.append(Line2D([0], [0], color=colors[i+1], lw=3, label=f"{names[i+1]}"))
+
+            figure.legend(
+                handles=legend_handles,
+                loc="upper right",
+                frameon=True
+            )
 
     else:
         figure = corner.corner(samples, **corner_kwargs, weights=weights)
